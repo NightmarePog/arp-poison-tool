@@ -65,14 +65,25 @@ def toggle_forwarding(enable=True):
 
     if system == "Linux":
         value = "1" if enable else "0"
-        os.system(f"sysctl -w net.ipv4.ip_forward={value}")
+        os.system(f"sudo sysctl -w net.ipv4.ip_forward={value}")
 
     elif system == "Windows":
-        value = "enabled" if enable else "disabled"
-        os.system(f"netsh interface ipv4 set global forwarding={value}")
+        # PowerShell vyžaduje přesné hodnoty 'Enabled' nebo 'Disabled'
+        value = "Enabled" if enable else "Disabled"
+        
+        # Přidáme '2>nul', aby se případné chyby (pokud uživatel není admin) 
+        # nevypisovaly ošklivě do konzole, a ošetříme to sami.
+        cmd = f"powershell.exe -Command \"Set-NetIPInterface -Forwarding {value}\" 2>nul"
+        exit_code = os.system(cmd)
+        
+        if exit_code != 0:
+            print(f"[-] CHYBA: Nepodařilo se nastavit IP forwarding.")
+            print(f"    Ujistěte se, že spouštíte terminál (CMD/PowerShell) JAKO SPRÁVCE.")
+        else:
+            print(f"[+] Windows IP Forwarding: {value}")
 
     else:
-        print("[-] Neznámý operační systém. Nelze nastavit IP forwarding.")
+        print(f"[-] OS {system} není podporován.")
 
 # --- Cleanup při ukončení --- #
 def cleanup():
