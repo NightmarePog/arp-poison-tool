@@ -53,7 +53,7 @@ def spoof():
             
             time.sleep(2)
 
-    except KeyboardInterrupt:
+    except KeyboardInterrupt:   
         print("Ukončuji útok, vracím síť do normálu...")
         # Odeslání správných ARP paketů pro obnovení sítě
         s(arp_obet_restore, verbose=False, count=5)
@@ -66,7 +66,7 @@ def spoof():
         
         # Uložení komunikace do .pcap souboru
         save_capture(packet_list)
-
+#test
 
 if __name__ == "__main__":
     spoof()
