@@ -20,6 +20,8 @@ def scan_network():
         devices.append({"ip": received.psrc, "mac": received.hwsrc})
         print(f"{counter}. | IP: {received.psrc} | MAC: {received.hwsrc}")
 
+scan_network()
+
 
 # --- Výběr oběti --- #
 def select_target():
@@ -30,6 +32,7 @@ def select_target():
 
     if answered_list:
         router_mac = answered_list[0][1].hwsrc
+        print(f"[+] Router: IP: {router_ip} | MAC: {router_mac}")
     else:
         print(f"[-] Nepodařilo se získat MAC adresu routeru ({router_ip}).")
         return None, None
@@ -54,6 +57,7 @@ def select_target():
         except (ValueError, IndexError):
             print("[-] Neplatný výběr. Zkuste to znovu.")
 
+select_target()
 
 # --- IP forwarding --- #
 def toggle_forwarding(enable=True):
